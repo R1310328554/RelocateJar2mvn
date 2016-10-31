@@ -1,217 +1,84 @@
 package edu.lk;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Properties;
-import java.util.StringTokenizer;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
-import org.apache.commons.io.IOUtils;
 
+/**
+ * 
+ * TODO  
+ * 1 获取jar
+ * 2 生成 .sha文件
+ * 3 生成_remote.repositories
+ * 4 ..
+ * 
+ * @author lk
+ *
+ */
 public class RelocateJar2mvn {
 
 	private static final String LOCAL_MVN_REPO = "D:\\mvn\\repos\\";
-	
-	private static final String META_INF = "META-INF/";
-	private static final String POM_XML_FILE = "pom.xml";
-	private static final String POM_PROPERTY_FILE = "pom.properties";
-	private static final String MANIFEST_FILE = "MANIFEST.MF";
-    static final int BUFFER = 4096;
-	static String xx = "E:\\downloads\\ff\\jackson-annotations-2.6.0.jar";
-	
+	private static final String _m2 = ".m2";
+	private static final String _gradle = ".gradle";
+	private static final String _ivy = ".ivy";
+	private static final String _ = "\\.";
+	private static final String _ECLIPSE = "\\Program Files";
+	private static final String _nexus = "\\nexus";
+	private static final String _JAVA = "\\JAVA";
+
+	static ExecutorService es = Executors.newCachedThreadPool();
+	static CompletionService<String> cs = new ExecutorCompletionService<String>(es);
+    
 	/**
 	 * @param args
 	 * @throws IOException 
+	 * @throws Exception 
 	 */
-	public static void main(String[] args) throws IOException {
-		relocateJar2mvn(xx);
-	}
-
-	/**
-	 * 将本地的jar， 放置到 本地maven仓库中去
-	 * @return 
-	 * 
-	 * @throws IOException
-	 */
-	private static String relocateJar2mvn(String localJar) {
-		JarElement jar;
-		try {
-			jar = parserJar(localJar);
-			if (jar == null) {
-				return "ERROR";
-			} else {
-//				downloadPomXml2mvn(name, name);
-			}
-			String mvnJarPath = locateJar(jar);
-			if (mvnJarPath == null) {
-				return "ERROR";
-			}
-			cpJar2mvn(xx, mvnJarPath);
-			String mvnPomPath = mvnJarPath.replace(".jar", ".pom");
-			cpPomXml2mvn(mvnPomPath, jar.getPomXml());
-		} catch (IOException e) {
-			e.printStackTrace();
-			return "ERROR" + e.getMessage();
+	public static void main(String[] args) throws IOException, Exception {
+		
+		String[] excludes = new String[]{"$RECYCLE.BIN" .toLowerCase(), LOCAL_MVN_REPO .toLowerCase(), _ECLIPSE.toLowerCase()
+				, _nexus.toLowerCase(), _JAVA.toLowerCase(),  _, "aaaaaddddxxx"};
+		EfusParser parser = new EfusParser(excludes);
+		String efuPath = "C:\\Users\\Administrator\\Desktop\\ff22.efu";
+		Set<JarLine> jarPaths = parser.getJarPaths(efuPath);
+		for (Iterator iterator = jarPaths.iterator(); iterator.hasNext();) {
+			JarLine jarLine = (JarLine) iterator.next();
+//			System.out.println( jarLine);
 		}
-		return "SUCCESS";
-	}
-
-	private static void cpPomXml2mvn(String mvnPomPath, String pomXmlStr) {
-		File mvnPom = new File(mvnPomPath);
+		System.out.println(" TOTAL SIZE : "  +  jarPaths .size() );
+		System.out.println();
+		System.out.println();
+		System.out.println();
+		System.out.println( " ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  ");
+		System.out.println();
+		System.out.println();
+		System.out.println();
+		
 		try {
-			OutputStream output = new FileOutputStream(mvnPom);
-			IOUtils.write(pomXmlStr, output);
-		} catch (IOException e) {
+			Iterator<JarLine> iterator = jarPaths.iterator();
+			while (iterator.hasNext()) {
+				JarLine jarLine = (JarLine) iterator.next();
+				SingleJar2mvn single = new SingleJar2mvn(jarLine.getPath());
+				cs.submit(single);
+			}
+			int tasksSize = jarPaths.size();
+			for (int i = 0; i < tasksSize; i++) {
+				Future<String> take = cs.take();
+				String string = take.get();
+				System.out.println( " ret " + string );
+			}
+		} catch (Exception e) {
 			e.printStackTrace();
 		} finally {
-			
-		}
+	    	es.shutdownNow();
+	    }
 		
-	}
-
-	/**
-	 * 从 mvn 远程 仓库下载 TODO
-	 * 
-	 * @param mvnPomPath
-	 * @param pomXmlStr
-	 */
-	private static void downloadPomXml2mvn(String mvnPomPath, String jarInfo) {
 		
-	}
-
-	private static void cpJar2mvn(String srcJarPath, String mvnJarPath) {
-		File srcJar = new File(srcJarPath);
-		try {
-			OutputStream output = new FileOutputStream(mvnJarPath);
-			InputStream input = new FileInputStream(srcJar);
-			IOUtils.copy(input, output);
-		} catch (IOException e) {
-			e.printStackTrace();
-		} finally {
-			
-		}
-	}
-
-	private static String locateJar(JarElement jar) {
-		String mvnPath = jar.getMvnPath();
-		if (mvnPath == null) {
-			return null;
-		}
-		String locateJarPath = LOCAL_MVN_REPO + "\\" + mvnPath;
-		File f = new File(locateJarPath);
-		if (!f.exists()) {
-			f.mkdirs();
-		}
-		return locateJarPath + "\\" +  jar.getJarName();
-	}
-
-	static JarElement parserJar(String path) throws IOException {
-		JarElement jarInfo = null;
-		
-		File jarFile = new File(path);
-		ZipInputStream zis = new ZipInputStream(new FileInputStream(jarFile));
-		ZipEntry entry;
-		
-        while ((entry = zis.getNextEntry()) != null) {
-//            System.out.println("Extracting: " + entry);
-            String name = entry.getName();
-//            System.out.println(name);
-            if (name.startsWith(META_INF)) {
-                if (name.endsWith(POM_PROPERTY_FILE)) {
-                	// META-INF/maven/com.fasterxml.jackson.core/jackson-annotations/pom.properties
-                	jarInfo = getJarInfo(zis, entry);
-    				if (jarInfo != null) {
-    					jarInfo.setName(jarFile.getName());
-    					//System.out.println( pomInfo);
-					}
-        		} else if (name.endsWith(POM_XML_FILE)) {
-        			String pomXmlInfo = getPomXmlInfo(zis, entry);
-    				if (jarInfo != null) {
-    					jarInfo.setPomXml(pomXmlInfo);
-    					break;
-    				}
-        		} else if (name.endsWith(MANIFEST_FILE)) {
-        			
-        		} else {
-        			
-        		}
-			} else {
-				continue;
-			}
-        }
-		return jarInfo;
-	}
-
-	private static String getPomXmlInfo(ZipInputStream zis, ZipEntry entry) throws IOException {
-		byte data[] = new byte[BUFFER];
-		int read;
-		StringBuffer sb = new StringBuffer();
-		while ((read = zis.read(data)) != -1) {
-			String pomXmlInfo = new String(data, 0, read);
-			sb.append(pomXmlInfo);
-		}
-		return sb.toString();
-	}
-	
-	private static JarElement getJarInfo(ZipInputStream zis, ZipEntry entry) throws IOException {
-		JarElement je = null;
-		byte data[] = new byte[BUFFER];
-		String artifactId = null;
-		String groupId = null;
-		String version = null;
-		
-		int read;
-		StringBuffer sb = new StringBuffer();
-		while ((read = zis.read(data)) != -1) {
-			String pomInfo = new String(data, 0, read);
-			sb.append(pomInfo);
-		}
-		StringTokenizer st = new StringTokenizer(sb.toString(), "\n");
-		while (st.hasMoreElements()) {
-			String str = ((String) st.nextElement()).trim();
-			System.out.println(str);
-			if (!str.startsWith("#") && str.indexOf('=') != -1) {
-				String[] arr = str.split("=");
-				if (arr.length == 2) {
-					String le = arr[0];
-					if (le.equals("version")) {
-						version = arr[1];
-					}
-					if (le.equals("groupId")) {
-						groupId = arr[1];
-					}
-					if (le.equals("artifactId")) {
-						artifactId = arr[1];
-					}
-				}
-			}
-		}
-		je = new JarElement(version, groupId, artifactId);
-//		Properties prop = new Properties();
-//		prop.
-//        String string = name.split(META_INF)[1];
-        return je;
-	}
-	
-
-	private static JarElement getPomInfo(ZipInputStream zis, ZipEntry entry) throws IOException {
-		JarElement je = null;
-        String name = entry.getName();
-        if (name.endsWith(POM_PROPERTY_FILE)) {
-        	
-		} else if (name.endsWith(POM_XML_FILE)) {
-			
-		} else if (name.endsWith(MANIFEST_FILE)) {
-			
-		} else {
-			
-		}
-        return null;
 	}
 }
