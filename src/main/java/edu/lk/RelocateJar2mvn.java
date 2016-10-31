@@ -16,7 +16,8 @@ import java.util.concurrent.Future;
  * 1 获取jar
  * 2 生成 .sha文件
  * 3 生成_remote.repositories
- * 4 ..
+ * 4  占内存太多的情况 ，
+ * 5 处理比较慢， 电脑卡
  * 
  * @author lk
  *
